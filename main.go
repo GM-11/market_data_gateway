@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,15 +18,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func main() { os.Exit(run()) }
-
-func run() int {
+func main() {
 	cfg := LoadConfig()
 
 	conn, err := grpc.NewClient(cfg.EngineFeed, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		slog.Error("engine feed client failed", "err", err)
-		return 1
+		return
 	}
 	defer conn.Close()
 
@@ -34,11 +35,16 @@ func run() int {
 	err = feed.Run(ctx, pb.NewEngineFeedClient(conn), cfg.GatewayID, logHandler{})
 	if errors.Is(err, context.Canceled) {
 		slog.Info("stopped")
-		return 0
+		os.Exit(0)
 	}
 
 	slog.Error("feed stopped", "err", err)
-	return 1
+
+	mux := http.NewServeMux()
+
+	fmt.Println("Server started on :8082")
+	log.Fatal(http.ListenAndServe(":8082", mux))
+
 }
 
 type logHandler struct{}
